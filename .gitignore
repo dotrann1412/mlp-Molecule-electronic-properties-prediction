@@ -1,0 +1,10 @@
+data
+*.pyc
+*.pyo
+*.pyd
+
+# Byte-compiled / optimized / DLL files
+*.exe
+*.dll
+*.class
+*.so
