@@ -1,17 +1,12 @@
 from zlib import crc32
 from collections import Counter
 from itertools import chain
-from .smiles import smiles2graph
 
 class WL:
     """
     Base class for Weisfeiler-Lehman labelling graph
     """
-    def __init__(
-        self,
-        nodes_feat, adj, 
-        edges = None, edges_feats = None
-    ):
+    def __init__(self, nodes_feat, adj, *_):
 
         """initiate labels for each node by hashing a list of it properties."""
         self.adj = adj
@@ -19,6 +14,20 @@ class WL:
         # atom_labels for storing all labels lists across all iterations
         self.atom_labels = [[
             self.hash(feat) for feat in nodes_feat]]
+
+    def to_json(self):
+        return {
+            "atom_labels": self.atom_labels,
+            "adj": self.adj,
+            "name": self.__class__.__name__
+        }
+
+    @classmethod
+    def from_json(cls, data):
+        return cls(
+            data["atom_labels"],
+            data["adj"]
+        )
 
     def hash(self,l):
         """
@@ -47,8 +56,7 @@ class WL:
             adj_atoms_indices = self.get_adj(a1)
 
             # put adjacent atoms' labels into a list and sort it 
-            M = [
-                atom_labels[idx] for idx in adj_atoms_indices]
+            M = [atom_labels[idx] for idx in adj_atoms_indices]
             M = sorted(M)
 
             # insert label of the main atom into the beginning
@@ -70,10 +78,13 @@ class WLSubtree(WL):
     """
     Class for Weisfeiler-Lehman Subtree of Atom-based method
     """
-    def __init__(self, nodes, adj, 
-                 edges=None, edges_feats=None,sp_dists=None
-    ):
+    def __init__(self, nodes, adj, *_):
         super().__init__(nodes, adj)
+        
+    def to_json(self):
+        x = super().to_json()
+        x['name'] = self.__class__.__name__
+        return x
 
     def to_counter(self,num_iters):
         for i in range(num_iters):
@@ -84,16 +95,33 @@ class WLSubtree(WL):
         
 
 class WLEdge(WL):
-    def __init__(self, nodes, adj, edges, edges_feats,
-                 sp_dists=None
-    ):
-        super().__init__(nodes,adj)
+    def __init__(self, nodes, adj, edges, edges_feats, *_):
+        super().__init__(nodes, adj)
 
         self.edges = edges
         self.edges_feats = edges_feats
 
         self.edge_labels = []
         self.relabelling_edges()
+        
+    def to_json(self):
+        return {
+            "nodes": self.atom_labels,
+            "adj": self.adj,
+            "edges": self.edges,
+            "edges_feats": self.edges_feats,
+            "name": self.__class__.__name__
+        }
+            
+        
+    @classmethod
+    def from_json(cls, data):
+        return cls(
+            data["nodes"],
+            data["adj"],
+            data["edges"],
+            data["edges_feats"]
+        )
 
     def relabelling_edges(self):
         edge_labels = []
@@ -117,9 +145,7 @@ class WLEdge(WL):
         return Counter(edge_labels)
 
 class WLShortestPath(WL):
-    def __init__(self, nodes, adj, edges, edges_feats, 
-                 sp_dists
-    ):
+    def __init__(self, nodes, adj, sp_dists, *_):
         super().__init__(nodes,adj)
 
         self.num_nodes = len(nodes)
@@ -129,6 +155,22 @@ class WLShortestPath(WL):
 
         self.path_labels = []
         self.relabelling_path()
+        
+    def to_json(self):
+        return {
+            "nodes": self.atom_labels,
+            "adj": self.adj,
+            "sp_dists": self.sp_dists,
+            "name": self.__class__.__name__
+        }
+        
+    @classmethod
+    def from_json(cls, data):
+        return cls(
+            data["nodes"],
+            data["adj"],
+            data["sp_dists"]
+        )
 
     def relabelling_path(self):
         path_labels = []
@@ -154,11 +196,21 @@ class WLShortestPath(WL):
         return Counter(path_labels)
 
 def str2method(s):
-    if s == "subtree" or s == "wla":
+    if s == "WLSubtree":
         return WLSubtree
-    elif s == "edge" or s == "wlab" :
+    elif s == "WLEdge" :
         return WLEdge
-    elif s == "shortest_path" or s == "wlad" :
+    elif s == "WLShortestPath" :
         return WLShortestPath
+    else:
+        raise ValueError("Invalid method")
+
+def load(data):
+    if data["name"] == "WLSubtree":
+        return WLSubtree.from_json(data)
+    elif data["name"] == "WLEdge":
+        return WLEdge.from_json(data)
+    elif data["name"] == "WLShortestPath":
+        return WLShortestPath.from_json(data)
     else:
         raise ValueError("Invalid method")
